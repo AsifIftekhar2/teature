@@ -22,8 +22,7 @@ export default function Home() {
     const fileType = file.type;
     const isValidAudio = fileType.startsWith("audio/");
     const isValidVideo = fileType.startsWith("video/");
-    const isValidText = fileType.startsWith("text/") || 
-                       file.name.endsWith(".txt");
+    const isValidText = fileType.startsWith("text/") && file.name.endsWith(".txt");
 
     if (!isValidAudio && !isValidVideo && !isValidText) {
       setError("Please upload an audio, video, or text file.");
