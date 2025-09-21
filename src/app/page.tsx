@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import LectureInformation from "./LectureInfo";
 
 export default function Home() {
   const [error, setError] = useState<string>("");
@@ -132,6 +133,7 @@ export default function Home() {
             </ul>
           </div>
         </div>
+        <LectureInformation />
       </main>
     </div>
   );

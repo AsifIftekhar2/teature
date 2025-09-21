@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const bytes = await file.arrayBuffer();
   const uploadDir = path.join(process.cwd(), "uploads");
-  let filePath = path.join(uploadDir, file.name);
+  const filePath = path.join(uploadDir, "process.txt");
   let transcript: string | undefined;
 
   // Ensure uploads directory exists
@@ -51,11 +51,145 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (transcript !== undefined) {
-    const newFilename = path.basename(file.name, path.extname(file.name)) + ".txt";
-    filePath = path.join(uploadDir, newFilename);
-    await fs.writeFile(filePath, transcript, "utf-8");
+  if (transcript === undefined) {
+    return NextResponse.json({ error: "ElevenLabs API error" }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true, type: file.type, path: filePath, transcript });
+  // Save transcript to storage
+  await fs.writeFile(filePath, transcript, "utf-8");
+
+  const coralRes = await fetch('http://localhost:5555/api/v1/sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        "applicationId": "app",
+        "sessionId": "session1",
+        "privacyKey": "priv",
+        "agentGraphRequest": {
+          "agents": [
+            {
+              "id": {
+                "name": "interface",
+                "version": "0.0.1"
+              },
+              "name": "interface",
+              "coralPlugins": [],
+              "provider": {
+                "type": "local",
+                "runtime": "executable"
+              },
+              "blocking": true,
+              "options": {
+                "MODEL_API_KEY": {
+                  "type": "string",
+                  "value": process.env.MODEL_API_KEY
+                }
+              },
+              "customToolAccess": [
+                "user-input-request",
+                "user-input-respond"
+              ]
+            },
+            {
+              "id": {
+                "name": "tutor",
+                "version": "0.0.1"
+              },
+              "name": "tutor",
+              "coralPlugins": [],
+              "provider": {
+                "type": "local",
+                "runtime": "executable"
+              },
+              "blocking": true,
+              "options": {
+                "MODEL_API_KEY": {
+                  "type": "string",
+                  "value": process.env.MODEL_API_KEY
+                }
+              },
+              "customToolAccess": []
+            },
+            {
+              "id": {
+                "name": "firecrawl",
+                "version": "0.0.1"
+              },
+              "name": "firecrawl",
+              "coralPlugins": [],
+              "provider": {
+                "type": "local",
+                "runtime": "executable"
+              },
+              "blocking": true,
+              "options": {
+                "MODEL_API_KEY": {
+                  "type": "string",
+                  "value": process.env.MODEL_API_KEY
+                },
+                "FIRECRAWL_API_KEY": {
+                  "type": "string",
+                  "value": process.env.FIRECRAWL_API_KEY
+                }
+              },
+              "customToolAccess": []
+            }
+          ],
+          "customTools": {
+            "user-input-request": {
+              "transport": {
+                "type": "http",
+                "url": "http://localhost:3000/api/lecture-request"
+              },
+              "toolSchema": {
+                "name": "request-question",
+                "description": "Request a question from the user. Hangs until input is received.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "description": "Message to show to the user."
+                    }
+                  }
+                }
+              }
+            },
+            "user-input-respond": {
+              "transport": {
+                "type": "http",
+                "url": "http://localhost:3000/api/callback"
+              },
+              "toolSchema": {
+                "name": "answer-question",
+                "description": "Answer the last question you requested from the user. You can only respond once, and will have to request more input later.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string",
+                      "description": "Answer to show to the user."
+                    }
+                  },
+                  "required": [
+                    "response"
+                  ]
+                }
+              }
+            }
+          },
+          "groups": [
+            [
+              "interface",
+              "tutor",
+              "firecrawl"
+            ]
+          ]
+        }
+      })
+  })
+
+  return NextResponse.json({ success: true });
 }
