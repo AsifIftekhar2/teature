@@ -17,25 +17,45 @@ export async function POST(req: NextRequest) {
   }
 
   const bytes = await file.arrayBuffer();
-  const filePath = path.join("/tmp", file.name);
+  const uploadDir = path.join(process.cwd(), "uploads");
+  let filePath = path.join(uploadDir, file.name);
+  let transcript: string | undefined;
 
-  // Save text uploads to /tmp for local development
+  // Ensure uploads directory exists
+  try {
+    await fs.mkdir(uploadDir, { recursive: true });
+  } catch (error) {
+    // Directory might already exist
+  }
+
+  // Just write a text transcript directly to storage
   if (file.type.startsWith("text/") && file.name.endsWith(".txt")) {
     const buffer = Buffer.from(bytes);
     await fs.writeFile(filePath, buffer);
   }
+  else {
+    const blob = new Blob([bytes], { type: file.type });
+    const elevenlabs = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
 
-  const blob = new Blob([bytes], { type: file.type });
-  const elevenlabs = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+    // Convert audio to text
+    const elevenRes = await elevenlabs.speechToText.convert({
+        file: blob,
+        modelId: "scribe_v1", // Model to use, for now only "scribe_v1" is supported
+    });
+    console.log(elevenRes);
 
-  // Convert audio to text
-  const transcription = await elevenlabs.speechToText.convert({
-    file: blob,
-    modelId: "scribe_v1", // Model to use, for now only "scribe_v1" is supported
-  });
+    if ("text" in elevenRes && typeof elevenRes.text === "string") {
+      transcript = elevenRes.text;
+    } else {
+      transcript = undefined;
+    }
+  }
 
-  console.log(transcription);
+  if (transcript !== undefined) {
+    const newFilename = path.basename(file.name, path.extname(file.name)) + ".txt";
+    filePath = path.join(uploadDir, newFilename);
+    await fs.writeFile(filePath, transcript, "utf-8");
+  }
 
-
-  return NextResponse.json({ success: true, type: file.type, path: filePath });
+  return NextResponse.json({ success: true, type: file.type, path: filePath, transcript });
 }

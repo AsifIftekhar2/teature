@@ -3,17 +3,14 @@
 import { useState, useRef } from "react";
 
 export default function Home() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileType, setFileType] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     
     if (!file) {
-      setSelectedFile(null);
-      setFileType("");
       setError("");
       return;
     }
@@ -26,8 +23,6 @@ export default function Home() {
 
     if (!isValidAudio && !isValidVideo && !isValidText) {
       setError("Please upload an audio, video, or text file.");
-      setSelectedFile(null);
-      setFileType("");
       return;
     }
 
@@ -39,34 +34,51 @@ export default function Home() {
 
     if (isValidAudio && fileSize > maxAudioSize) {
       setError("Audio file size must be 100 MB or less.");
-      setSelectedFile(null);
-      setFileType("");
       return;
     }
 
     if (isValidVideo && fileSize > maxVideoSize) {
       setError("Video file size must be 100 MB or less.");
-      setSelectedFile(null);
-      setFileType("");
       return;
     }
 
     if (isValidText && fileSize > maxTextSize) {
       setError("Text file size must be 2 MB or less.");
-      setSelectedFile(null);
-      setFileType("");
       return;
     }
 
     setError("");
-    setSelectedFile(file);
-    
-    if (isValidAudio) {
-      setFileType("audio");
-    } else if (isValidVideo) {
-      setFileType("video");
-    } else {
-      setFileType("text");
+
+    // Upload file to backend
+    uploadFile(file);
+  };
+
+  const uploadFile = async (file: File) => {
+    setIsUploading(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Upload failed");
+      }
+
+      const result = await response.json();
+      console.log("Upload successful:", result);
+      
+    } catch (error) {
+      console.error("Upload error:", error);
+      setError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -74,13 +86,6 @@ export default function Home() {
     fileInputRef.current?.click();
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
 
   return (
     <div className="min-h-screen p-8">
@@ -94,9 +99,10 @@ export default function Home() {
           <div className="text-center">
             <button
               onClick={handleButtonClick}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+              disabled={isUploading}
+              className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors"
             >
-              Choose File
+              {isUploading ? "Uploading..." : "Choose File"}
             </button>
             <input
               ref={fileInputRef}
@@ -104,6 +110,7 @@ export default function Home() {
               onChange={handleFileUpload}
               accept="audio/*,video/*,text/*,.txt"
               className="hidden"
+              disabled={isUploading}
             />
           </div>
 
@@ -114,18 +121,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* File Information */}
-          {selectedFile && (
-            <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-2">Selected File:</h3>
-              <div className="space-y-2">
-                <p><strong>Name:</strong> {selectedFile.name}</p>
-                <p><strong>Type:</strong> {fileType}</p>
-                <p><strong>Size:</strong> {formatFileSize(selectedFile.size)}</p>
-                <p><strong>Last Modified:</strong> {new Date(selectedFile.lastModified).toLocaleString()}</p>
-              </div>
-            </div>
-          )}
 
           {/* Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
